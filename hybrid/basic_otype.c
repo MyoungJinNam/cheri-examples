@@ -1,6 +1,8 @@
 /***
- * This example implements a simple cheri type allocator to show
- * how cheri otype values are determined.
+ * This example implements a simple cheri otype maker 
+ * to show how cheri otype values are determined.
+ * Function simple_maketype replicates cheri_maketype function.
+ * Consider cheric.h for original cheri_maketype. 
  * Note: cheriintrin.h is not used in this example.
  ***/
 
@@ -9,146 +11,25 @@
 #include <sys/sysctl.h>
 #include <sys/types.h>
 
-#define SANDBOX_CODE_SZ 1000 // approx. later modify it.
-
-// NOTE ------
-/// cheriintrin.h is commented out temporarily in this example //
-typedef long cheri_otype_t;
-//#define cheri_is_sealed(x) __builtin_cheri_sealed_get(x)
-// from cheriintrin.h  ///
-
-// static void * __capability sandbox_1_sealcap;
-static void *__capability cheriobj_1_codecap;
-static void *__capability cheriobj_1_datacap;
-
-// static void * __capability sandbox_2_sealcap;
-static void *__capability cheriobj_2_codecap;
-static void *__capability cheriobj_2_datacap;
-
-static void *__capability codecap_create(void (*sandbox_base)(void), void *sandbox_end)
-{
-    void *__capability codecap;
-
-#ifdef __CHERI_PURE_CAPABILITY__
-    (void) sandbox_end;
-    codecap = cheri_andperm(sandbox_base, CHERI_PERM_GLOBAL | CHERI_PERM_LOAD | CHERI_PERM_EXECUTE);
-#else
-    codecap = cheri_codeptrperm(sandbox_base, (size_t) sandbox_end - (size_t) sandbox_base,
-                                CHERI_PERM_GLOBAL | CHERI_PERM_LOAD | CHERI_PERM_EXECUTE);
-#endif
-    return (codecap);
-}
-
-// ?? CHERI_PERM_INVOKE is not used??
-
-static void *__capability datacap_create(void *sandbox_base, void *sandbox_end)
-{
-    void *__capability datacap;
-
-#ifdef __CHERI_PURE_CAPABILITY__
-    (void) sandbox_end;
-    datacap = cheri_andperm(sandbox_base, CHERI_PERM_GLOBAL | CHERI_PERM_LOAD | CHERI_PERM_STORE |
-                                              CHERI_PERM_LOAD_CAP | CHERI_PERM_STORE_CAP |
-                                              CHERI_PERM_STORE_LOCAL_CAP);
-#else
-    datacap =
-        cheri_ptrperm(sandbox_base, // TODO: define sandbox_base/end
-                      (size_t) sandbox_end - (size_t) sandbox_base,
-                      CHERI_PERM_GLOBAL | CHERI_PERM_LOAD | CHERI_PERM_STORE | CHERI_PERM_LOAD_CAP |
-                          CHERI_PERM_STORE_CAP | CHERI_PERM_STORE_LOCAL_CAP);
-#endif
-    return (datacap);
-}
-
 //- Create a global_sealcap to track the next cheri_otype -//
 void *__capability global_sealcap;
 
-//- Simple type allocator - Takes an otype size; returns the next otype -//
-void *__capability alloc_type(size_t tysz)
-{
-    // TODO: Try with cheri_otype_alloc :: otype_t cheri_otype_alloc(void);
-    // cheri_otype 0~3      : reserved by morello,
-    //             4~ 2^13  : available for userspace
-    // Check how Cheri makes a type: "cheri_otype_t cheri_maketype(sealing_cap, type)"
-    //          ?? -> cheri_maketype return type is otype??
-    
-    void * __capability sealer; 
-    size_t sealer_sz = tysz; 
-    
-    if (sysctlbyname("security.cheri.sealcap", &sealer, &sealer_sz, NULL, 0) < 0)
-    {
-        printf("Fatal error. Cannot get `security.cheri.sealcap`.");
-        exit(1);
-    } // TODO: Does passing a size to security.cheri.sealcap have any impact?
-   
-    __builtin_cheri_cap_type_copy(sealer, global_sealcap);
-    sealer = cheri_maketype(sealer, sealer_sz); 
-    __builtin_cheri_cap_type_copy(global_sealcap, sealer); 
-    // suitable for a single thread
-    return sealer; 
-
-    /*
-    void *__capability sealcap;
-    sealcap = cheri_maketype(global_sealcap, tysz);
-    __builtin_cheri_cap_type_copy(global_sealcap, sealcap);
-    return sealcap;
-    */
-}
+uint64_t next; 
 
 /*
-//
-// TODO: test function attributes (ccall, ccallee), with args
-//
-__attribute__((cheri_ccall))
-__attribute__((cheri_method_suffix("_cap")))
-__attribute__((cheri_method_class(main_obj)))
-int sandbox_1_func(int * __capability intcap);
-
-int sandbox_1_func(int * __capability intcap)
-{
-    struct cheri_object sb1_obj;
-
-    sb1_obj.co_codecap = cheriobj_1_codecap;
-    sb1_obj.co_datacap = cheriobj_1_datacap;
-
-    (void)libcheri_invoke(sb1_obj, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
-            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-
-    return *intcap + 1;
-}
-
-__attribute__((cheri_ccall))
-__attribute__((cheri_method_suffix("_cap")))
-__attribute__((cheri_method_class(sandbox2_obj)))
-int sandbox_2_func(int * __capability intcap);
-
-int sandbox_2_func(int * __capability intcap)
-{
-    struct cheri_object sb2_obj;
-
-    sb2_obj.co_codecap = cheriobj_2_codecap;
-    sb2_obj.co_datacap = cheriobj_2_datacap;
-
-    (void)libcheri_invoke(sb2_obj, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
-            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-
-    return *intcap + 1;
-}
-///
-/// up_to_here
-///
+ Replica of cheri_maketype with a different return type.
+ Note that cheri_maketype's return type is otype, and 
+ otype is typedefed long in cheriin.h
 */
-
-void sandbox_1_func()
+void *__capability simple_maketype (void *__capability root_type, size_t tysz)
 {
-    printf("--> end_of_sandbox_1_func\n");
-}
+    void * __capability next_type;
 
-void sandbox_2_func()
-{
-    printf("--> end_of_sandbox_2_func\n");
+    c = root_type;
+    c = cheri_setoffset(next_type, tysz);   /* Set type as desired. */
+    c = cheri_csetbounds(next_type, 1);     /* ISA implies length of 1. */
+    c = cheri_andperm(next_type, CHERI_PERM_GLOBAL | CHERI_PERM_SEAL); /* Perms. */
+    return (next_type);
 }
 
 int main() // Remove unused args
@@ -160,20 +41,46 @@ int main() // Remove unused args
 
     //=- Init a global_sealing capability -=//
     
-    size_t global_sealcap_sz = sizeof(global_sealcap); // sizeof(global_sealcap);
-    printf("global_sealcap_sz: %lu\n", global_sealcap_sz);
+    //size_t global_sealcap_sz = sizeof(global_sealcap); // sizeof(global_sealcap);
+    //printf("global_sealcap_sz: %lu\n", global_sealcap_sz);
+    
+    next = sizeof(global_sealcap); // sizeof(global_sealcap);
 
-    if (sysctlbyname("security.cheri.sealcap", &global_sealcap, &global_sealcap_sz, NULL, 0) < 0)
+    //if (sysctlbyname("security.cheri.sealcap", &global_sealcap, &global_sealcap_sz, NULL, 0) < 0)
+    if (sysctlbyname("security.cheri.sealcap", &global_sealcap, &next, NULL, 0) < 0)
     {
         printf("Fatal error. Cannot get `security.cheri.sealcap`.");
         exit(1);
-    } // TODO: Does passing a size to security.cheri.sealcap have any impact?
+    } 
     
-    printf("_1__global_sealcap__________\n");
+    printf("** Global root sealcap\n");
     print_cap(global_sealcap);
     
-    //=- Create cheri_object_1 sealcap -=//
-
+    //=- Create arbitrary memory objects -=//
+    size_t objsz_1 = sizeof(char);
+    char * ptr_1 = malloc(objsz_1);
+    void *__capability cap_1 = (__cheri_tocap int *__capability) ptr_1;
+    write_ddc((void *__capability) cap_1);
+    cap_1 = cheri_address_set((void *__capability) cap_1, (unsigned long) ptr_1);
+    cap_1 = cheri_bounds_set((void *__capability) cap_1, objsz_1);
+    cheri_perms_and(cap_1, CHERI_PERM_LOAD | CHERI_PERM_STORE | CHERI_PERM_LOAD_CAP);
+    
+    printf("** obj_cap_1 before sealing__________\n");
+    print_cap(cap_1);
+    
+    void *__capability sealcap_1 = simple_maketype(global_sealcap, objsz_1);
+    
+    printf("** sealcap_1__________\n");
+    print_cap(sealcap_1);
+    
+    void * __capability sealed_objcap = cheri_seal(cap_1, seal_cap_1);
+    printf("** obj_cap_1 after sealing__________\n");
+    print_cap(cap_1);
+     
+    
+    size_t objsz_2 = sizeof(int) * 5;
+    char * ptr_2 = malloc(objsz_2);
+    
     //- Get a next type i.e. create a next sealing capability -//
     //size_t sealcap_size_1 = 7; // --> Random size is given to test how types are assigned
     //void *__capability sealcap_1 = alloc_type(sealcap_size_1);

@@ -1,20 +1,29 @@
-/***
- * This example implements a simple cheri type allocator to show
- * how cheri otype values are determined.
- * Note: cheriintrin.h is not used in this example.
- ***/
+/*
+    This example implements a simple cheri type allocator
+    to show how cheri otype values are determined.
+
+    Note: cheriintrin.h is not used in this example.
+
+*/
 
 #include "../include/print.h"
 #include "include/utils.h"
+#include <assert.h>
+#include <cheri.h>
+#include <cheri/cheri.h>
+#include <cheri/cheric.h>
+#include <machine/sysarch.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
 
 #define SANDBOX_CODE_SZ 1000 // approx. later modify it.
 
-// NOTE ------
+//- NOTE ------
 /// cheriintrin.h is commented out temporarily in this example //
 typedef long cheri_otype_t;
-//#define cheri_is_sealed(x) __builtin_cheri_sealed_get(x)
+#define cheri_is_sealed(x) __builtin_cheri_sealed_get(x)
 // from cheriintrin.h  ///
 
 // static void * __capability sandbox_1_sealcap;
@@ -71,28 +80,11 @@ void *__capability alloc_type(size_t tysz)
     //             4~ 2^13  : available for userspace
     // Check how Cheri makes a type: "cheri_otype_t cheri_maketype(sealing_cap, type)"
     //          ?? -> cheri_maketype return type is otype??
-    
-    void * __capability sealer; 
-    size_t sealer_sz = tysz; 
-    
-    if (sysctlbyname("security.cheri.sealcap", &sealer, &sealer_sz, NULL, 0) < 0)
-    {
-        printf("Fatal error. Cannot get `security.cheri.sealcap`.");
-        exit(1);
-    } // TODO: Does passing a size to security.cheri.sealcap have any impact?
-   
-    __builtin_cheri_cap_type_copy(sealer, global_sealcap);
-    sealer = cheri_maketype(sealer, sealer_sz); 
-    __builtin_cheri_cap_type_copy(global_sealcap, sealer); 
-    // suitable for a single thread
-    return sealer; 
 
-    /*
     void *__capability sealcap;
     sealcap = cheri_maketype(global_sealcap, tysz);
     __builtin_cheri_cap_type_copy(global_sealcap, sealcap);
     return sealcap;
-    */
 }
 
 /*
@@ -159,26 +151,19 @@ int main() // Remove unused args
     printf("----------------------------------------\n\n");
 
     //=- Init a global_sealing capability -=//
-    
-    size_t global_sealcap_sz = sizeof(global_sealcap); // sizeof(global_sealcap);
-    printf("global_sealcap_sz: %lu\n", global_sealcap_sz);
 
+    size_t global_sealcap_sz = sizeof(global_sealcap); // sizeof(global_sealcap);
     if (sysctlbyname("security.cheri.sealcap", &global_sealcap, &global_sealcap_sz, NULL, 0) < 0)
     {
         printf("Fatal error. Cannot get `security.cheri.sealcap`.");
         exit(1);
-    } // TODO: Does passing a size to security.cheri.sealcap have any impact?
-    
-    printf("_1__global_sealcap__________\n");
-    print_cap(global_sealcap);
-    
+    }
+
     //=- Create cheri_object_1 sealcap -=//
 
     //- Get a next type i.e. create a next sealing capability -//
-    //size_t sealcap_size_1 = 7; // --> Random size is given to test how types are assigned
-    //void *__capability sealcap_1 = alloc_type(sealcap_size_1);
-    size_t sealcap_size_1 = global_sealcap_sz; // --> Random size is given to test how types are assigned
-    void *__capability sealcap_1 = alloc_type(global_sealcap_sz);
+    size_t sealcap_size_1 = 12; // --> Random size is given to test how types are assigned
+    void *__capability sealcap_1 = alloc_type(sealcap_size_1);
 
     //- NOTE: Since this example is just to check otypes,
     //- we set arbitrary address ranges of code and data capability
@@ -204,7 +189,7 @@ int main() // Remove unused args
 
     //- Create cheri_object_2 sealcap -//
 
-    size_t sealcap_size_2 = 25; // arbitrary type size for sealcap2
+    size_t sealcap_size_2 = 32; // arbitrary type size for sealcap2
     void *__capability sealcap_2 = alloc_type(sealcap_size_2);
 
     //- Create cheri_object_2 *code* cap -//
@@ -226,6 +211,8 @@ int main() // Remove unused args
     assert(cheri_is_sealed(cheriobj_2_codecap));
     assert(cheri_is_sealed(cheriobj_2_datacap));
 
+    printf("____global_sealcap__________\n");
+    print_cap(global_sealcap);
 
     printf(">>>> cheri_object_1__________________________\n");
     printf("Sealcap_1_user_defined_tysz : %04lx\n", sealcap_size_1);
@@ -263,13 +250,14 @@ int main() // Remove unused args
     assert(cheri_type_get(cheriobj_1_codecap) != cheri_type_get(cheriobj_2_codecap));
     assert(cheri_type_get(cheriobj_1_datacap) != cheri_type_get(cheriobj_2_datacap));
 
-    printf(" ** Success: object 1 and 2's types differ ** \n");
+    printf(" ** Success: code and data capability types differ ** \n");
 
     // Each cheri_object's code and data address ranges are set the same,
     // but perms for code and data differ.
     // TODO: Test obj cap invoke
     assert(cheri_perms_get(cheriobj_1_codecap) != cheri_perms_get(cheriobj_1_datacap));
     assert(cheri_perms_get(cheriobj_2_codecap) != cheri_perms_get(cheriobj_2_datacap));
+
     printf(" ** Success: code and data capability perms differ ** \n");
 
     // TODO: cheri_invoke

@@ -1,0 +1,141 @@
+#include <cheri/cheri.h>
+#include <cheri/cheric.h>
+//#include <cheri/libcheri_fd.h>
+//#include <cheri/libcheri_sandbox.h>
+
+#include "../include/common_orig.h"
+#include "include/utils.h"
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+
+static void *__capability sandbox_creturn_sealcap;
+static void *__capability sandbox_creturn_codecap;
+static void *__capability sandbox_creturn_datacap;
+
+static void *__capability sandbox_nop_creturn_sealcap;
+static void *__capability sandbox_nop_creturn_codecap;
+static void *__capability sandbox_nop_creturn_datacap;
+
+static void *__capability codecap_create(void (*sandbox_base)(void), void *sandbox_end)
+{
+    void *__capability codecap;
+
+#ifdef __CHERI_PURE_CAPABILITY__
+    (void) sandbox_end;
+    codecap = cheri_andperm(sandbox_base, CHERI_PERM_GLOBAL | CHERI_PERM_LOAD | CHERI_PERM_EXECUTE);
+#else
+    codecap = cheri_codeptrperm(sandbox_base, (size_t) sandbox_end - (size_t) sandbox_base,
+                                CHERI_PERM_GLOBAL | CHERI_PERM_LOAD | CHERI_PERM_EXECUTE);
+#endif
+    return (codecap);
+}
+
+__attribute__((cheri_ccallee))
+//__attribute__((cheri_method_suffix("_cap")))
+__attribute__((cheri_method_class(main_obj))) int
+internal_func1(int *__capability intcap);
+
+int internal_func1(int *__capability intcap)
+{
+    return *intcap + 1;
+}
+
+__attribute__((cheri_ccall)) __attribute__((cheri_method_suffix("_cap")))
+__attribute__((cheri_method_class(main_obj))) int
+external_func1(int *__capability intcap);
+
+int external_func1(int *__capability intcap)
+{
+    return *intcap + 1;
+}
+
+// void * __capability _cheri_capability_build_user_code(struct thread *td,
+//                   uint32_t perms, ptraddr_t basep, size_t length,
+//                   off_t off, const char* func, int line);
+// void * __capability _cheri_capability_build_user_data(uint32_t perms,
+//                  ptraddr_t basep, size_t length, off_t off,
+//                  const char* func, int line, bool exact);
+
+__attribute__((cheri_ccall))
+//__attribute__((cheri_method_suffix("_cap")))
+__attribute__((cheri_method_class(main_obj))) int
+main();
+
+int main() // remove unused args
+{
+    struct cheri_object main_obj;
+    /*
+    // build_user_code/data
+    // int entry_addr = cheri_pcc_get(); // offset (entry point ~ pcc)?
+    */
+
+    void *__capability sealcap;
+    size_t sealcap_size = sizeof(sealcap);
+    if (sysctlbyname("security.cheri.sealcap", &sealcap, &sealcap_size, NULL, 0) < 0)
+    {
+        error("Fatal error. Cannot get `security.cheri.sealcap`.");
+        exit(1);
+    }
+
+    //- code_cap setup -//
+    main_obj.co_codecap = (__cheri_tocap void *__capability) cheri_pcc_get();
+    main_obj.co_codecap =
+        cheri_perms_and(main_obj.co_codecap, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP |
+                                                 CHERI_PERM_EXECUTE | CHERI_PERM_SEAL);
+    main_obj.co_codecap = cheri_seal(main_obj.co_codecap, sealcap);
+    assert(cheri_is_sealed(main_obj.co_codecap));
+
+    //- data_cap setup -//
+    main_obj.co_datacap = (__cheri_tocap void *__capability) cheri_ddc_get();
+    void *stack_addr = __builtin_frame_address(0);
+    main_obj.co_datacap = cheri_address_set((void *__capability) main_obj.co_datacap,
+                                            (unsigned long) stack_addr); // todo: check val
+    main_obj.co_datacap =
+        cheri_perms_and(main_obj.co_datacap,
+                        CHERI_PERM_STORE | CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP | CHERI_PERM_SEAL);
+    main_obj.co_datacap = cheri_seal(main_obj.co_datacap, sealcap);
+
+    assert(cheri_is_sealed(main_obj.co_datacap));
+
+    printf("\n---main_obj.co_codecap ---------\n");
+    pp_cap((void *__capability) main_obj.co_codecap);
+    printf("\n---main_obj.co_datacap ---------\n");
+    pp_cap((void *__capability) main_obj.co_datacap);
+
+    int *heap_ptr = (int *) malloc(sizeof(int));
+    int *__capability heap_cap = (__cheri_tocap int *__capability) heap_ptr;
+    write_ddc((void *__capability) heap_cap);
+    // heap_cap = cheri_seal(heap_cap, sealcap);
+    printf("\n --- heapcap_1/4 ---------\n");
+    pp_cap((void *__capability) heap_cap);
+
+    heap_cap = cheri_address_set((void *__capability) heap_cap, (unsigned long) heap_ptr);
+    heap_cap = cheri_bounds_set((void *__capability) heap_cap, sizeof(int));
+    // cheri_perms_and(heap_cap, CHERI_PERM_LOAD | CHERI_PERM_STORE | CHERI_PERM_LOAD_CAP |
+    // CHERI_PERM_GLOBAL | CHERI_PERM_SEAL);
+    cheri_perms_and(heap_cap, CHERI_PERM_LOAD | CHERI_PERM_STORE | CHERI_PERM_LOAD_CAP);
+
+    // CHERI_PERM_INVOKE is not used??
+    printf("\n --- heapcap_2/4 ---------\n");
+    pp_cap((void *__capability) heap_cap);
+
+    *heap_cap = 10;
+    printf("\n --- heapcap_3/4 ---------\n");
+    printf("*heap_cap: %d\n", *heap_cap);
+
+    *heap_cap = internal_func1(heap_cap);
+    printf("\n --- heapcap_4/4 ---------\n");
+    printf("heapval_internal: %d (11?)\n", *heap_cap);
+
+    *heap_cap = external_func1(heap_cap);
+    printf("\n -- ERROR ----- heapval_external: %d (ERROR: this should not be printed)\n",
+           *heap_cap);
+
+    // void * heap_reg_ptr = malloc (1);
+    // void *__capability in_code_cap_2 = (void *__capability) internal_func2;
+    // internal_func2();
+
+    return 0;
+}

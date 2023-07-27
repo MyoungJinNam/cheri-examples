@@ -4,6 +4,6 @@
 SHARED_SOURCES := shared.s
 CFILES := $(wildcard *.c)
 
-include ../../../build/Makefile.vars.morello-hybrid
-include ../../../build/Makefile.vars.common
-include ../../../build/Makefile.simple
+include ../../build/Makefile.vars.morello-hybrid
+include ../../build/Makefile.vars.common
+include ../../build/Makefile.simple
