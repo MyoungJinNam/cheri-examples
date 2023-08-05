@@ -4,7 +4,7 @@
 # Common configuration for 'riscv64-purecap' platforms.
 # This should not be invoked directly.
 
-CHERIBASE ?= $(HOME)/cheri
+CHERIBASE ?= $(HOME)/tools/cheri
 SDKBASE ?= $(CHERIBASE)/output/sdk
 CFLAGS := --config cheribsd-riscv64-purecap.cfg $(CFLAGS)
 PLATFORM := riscv64-purecap
