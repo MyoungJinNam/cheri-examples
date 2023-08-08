@@ -87,6 +87,7 @@ elif [ "$1" = "morello-hybrid" ]; then
     run OK hybrid/compartment_examples/inter_comp_call/base main
     run OK hybrid/compartment_examples/inter_comp_call/malicious_compartments inter_comp_call-secure
     run OK syscall-restrict syscall-restrict
+    run OK hybrid simple_otype 
 else
     echo "$1 not recognised."
     exit 1
