@@ -1,15 +1,16 @@
 /***
+    * For morello-hybrid mode 
     This example implements a simple cheri type allocator 
     to show how cheri otype values are made.
     This replicates libcheri's functions such as cheri_maketype 
     and libcheri_alloc_type_capability with some changes. 
     Consider comments above each function definition.
+    
     *** NOTE *** 
-    This example does not use cheriintrin.h. 
-    It is highly recommended to use cheriintrin.h instead of 
-    disabling cherriintrinh and using cheri.h/cheric.h.
     This example disabled cheriintrin.h just to show
     simple otype making and otype allocation.
+    It is highly recommended to use cheriintrin.h instead of 
+    disabling cherriintrinh and using cheri.h/cheric.h.
  ***/
 
 #include "include/print.h"
@@ -53,7 +54,8 @@ datacap_create(void *LB, size_t sz_data) // LB: lower bound, base
     with a minor change in its function type --
     while return type of cheri_maketype is otype_t, 
     simple_maketype's is capability itself without casting.
-    Note: otype_t is typedef'ed to long in cheriintrin.h 
+    Note: In cheriintrin.h, 
+            typedef long cheri_otype_t (*not* otype_t).   
 */
 static __inline 
 void * __capability 
@@ -134,7 +136,8 @@ int main() // Remove unused args
 
     // Sealing datacap with a sealing cap
     void * __capability sealed_dc_1 = cheri_seal(datacap_1, sealcap_1);
-    
+   
+    // type prints 5 (== sealing_root's value + SEALING_ROOT_SZ)
     printf("> data_cap_1 after sealing: \n");
     print_cap(sealed_dc_1);
 
@@ -159,6 +162,7 @@ int main() // Remove unused args
     // Sealing datacap with a sealing cap
     void * __capability sealed_dc_2 = cheri_seal(datacap_2, sealcap_2);
 
+    // type prints 8 (== sealcap_1's value + tysz_1) 
     printf("> data_cap_2 after sealing \n");
     print_cap(sealed_dc_2);
     
