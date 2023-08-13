@@ -73,7 +73,8 @@ simple_maketype(void * __capability root_type, register_t type)
     simple_alloc_type_capability replicates cheri's 
     libcheri_alloc_type_capability with following change -- 
     (1) While cheri_alloc_type_capability takes two arguments 
-        (&type_next, CHERI_OTYPE_USER_MAX for arguments), 
+        (&type_next, CHERI_OTYPE_USER_MAX for arguments), and
+        adds 1 to type_next,
         simple_alloc_type_capability takes type_size instead of MAX,
         and increases type_next by the type_size.
     (2) While libcheri_alloc_type_capability initialises a root sealing cap
