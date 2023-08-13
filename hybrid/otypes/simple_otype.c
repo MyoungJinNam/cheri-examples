@@ -112,7 +112,12 @@ int main() // Remove unused args
         printf("Fatal error. Cannot get `security.cheri.sealcap`.");
         exit(1);
     }
-    
+   
+    /***
+    *   otype 0x0 ~ 0x3      : reserved by morello,
+    *         0x4 ~ USER_MAX : available for userspace
+    ***/
+
     printf("> Sealing root: \n");
     print_cap(sealing_root);
     
