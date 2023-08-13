@@ -143,7 +143,7 @@ int main() // Remove unused args
     // Sealing datacap with a sealing cap
     void * __capability sealed_dc_1 = cheri_seal(datacap_1, sealcap_1);
    
-    // type prints 5 (== sealing_root's value + SEALING_ROOT_SZ)
+    // sealed_dc_1's otype is 5 (== sealing_root's value (0x4) + SEALING_ROOT_SZ)
     printf("> data_cap_1 after sealing: \n");
     print_cap(sealed_dc_1);
 
@@ -168,7 +168,7 @@ int main() // Remove unused args
     // Sealing datacap with a sealing cap
     void * __capability sealed_dc_2 = cheri_seal(datacap_2, sealcap_2);
 
-    // type prints 8 (== sealcap_1's value + tysz_1) 
+    // sealed_dc_2's otype is 8 (== sealcap_1's value + tysz_1) 
     printf("> data_cap_2 after sealing \n");
     print_cap(sealed_dc_2);
     
