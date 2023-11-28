@@ -154,7 +154,7 @@ int main() // Remove unused args
     //- Create a next sealing cap with size tysz_2 
     uint64_t tysz_2 = 4;   
     void *__capability sealcap_2 = simple_alloc_type_capability (&type_next, tysz_2);
-    
+
     size_t dtsz_2 = 32;
     void * dtptr_2 = malloc (dtsz_2);
     void * __capability datacap_2 = datacap_create(dtptr_2, dtsz_2); 
